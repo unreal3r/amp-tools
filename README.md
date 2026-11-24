@@ -11,6 +11,7 @@ Requires Blender 5.3 or newer.
 | Tool | What it does | Docs |
 |---|---|---|
 | Instance Along Edges | Places a mesh or collection along any string of mesh edges, with even spacing even across gaps. | [docs](docs/instance_along_edges.md) |
+| Shrinkwrap Collection | Wraps a mesh onto the combined surface of every mesh in a collection, with an offset. | [docs](docs/shrinkwrap_collection.md) |
 
 ## Install
 
@@ -27,7 +28,13 @@ user extensions directory (`extensions/user_default/amp_tools`) and restart Blen
 ## Adding a tool
 
 1. Add a module in `amp_tools/tools/` that defines `classes` (at least one operator)
-   and a `TOOL` dict: `{"operator", "label", "icon", "doc"}`.
+   and a `TOOL` dict: `{"operator", "label", "icon", "doc"}`. Helpers live in
+   `amp_tools/tools/_common.py`.
+   - **Node group built in Python:** see `instance_along_edges.py`.
+   - **Existing node group from a .blend:** save just that group into
+     `amp_tools/assets/<tool>.blend` and load it with `_common.get_bundled_group()`;
+     see `shrinkwrap_collection.py`. Bump the tool's `GROUP_VERSION` whenever you
+     replace the .blend, so files using the old copy get upgraded.
 2. Add it to `MODULES` in `amp_tools/tools/__init__.py`.
 3. Write `docs/<tool>.md` and list it in `docs/README.md` and the table above.
 4. Bump `version` in `amp_tools/blender_manifest.toml`.

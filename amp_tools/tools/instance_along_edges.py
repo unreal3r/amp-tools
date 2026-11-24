@@ -11,6 +11,8 @@ Docs: docs/instance_along_edges.md in the AMP Tools repository.
 
 import bpy
 
+from . import _common
+
 GROUP_NAME = "Instance Along Edges"
 
 
@@ -44,7 +46,7 @@ def set_menu(node, prop, socket_name, value):
 # Bump when the node tree changes, so files built with an older version get
 # their node group rebuilt (existing modifiers keep their settings).
 GROUP_VERSION = 3
-VERSION_KEY = "amp_tools_version"
+VERSION_KEY = _common.VERSION_KEY
 
 
 def get_or_build_group():
@@ -268,30 +270,11 @@ class AMP_OT_instance_along_edges(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return any(o.type == "MESH" for o in context.selected_objects) or (
-            context.active_object is not None and context.active_object.type == "MESH"
-        )
+        return _common.has_mesh_target(context)
 
     def execute(self, context):
-        targets = [o for o in context.selected_objects if o.type == "MESH"]
-        if not targets and context.active_object and context.active_object.type == "MESH":
-            targets = [context.active_object]
-
-        ng = get_or_build_group()
-        added = 0
-        for obj in targets:
-            mod = next((m for m in obj.modifiers if m.type == "NODES" and m.node_group == ng), None)
-            if mod is None:
-                mod = obj.modifiers.new(GROUP_NAME, "NODES")
-                mod.node_group = ng
-                added += 1
-            obj.modifiers.active = mod
-
-        if added:
-            self.report({"INFO"}, f"Added {GROUP_NAME} to {added} object(s); set Object/Collection in the modifier")
-        else:
-            self.report({"INFO"}, f"{GROUP_NAME} already on the selected object(s)")
-        return {"FINISHED"}
+        return _common.add_modifier(self, context, get_or_build_group(), GROUP_NAME,
+                                    "set Object or Collection in the modifier")
 
 
 TOOL = {
