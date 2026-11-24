@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "amp_tools"
+version = "1.0.0"
+name = "AMP Tools"
+tagline = "One-click production tools, starting with Instance Along Edges"
+maintainer = "unreal3r"
+type = "add-on"
+
+website = "https://github.com/unreal3r/amp-tools"
+
+tags = ["Geometry Nodes", "Modeling", "Object"]
+
+blender_version_min = "5.3.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 unreal3r"]
