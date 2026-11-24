@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "amp_tools"
-version = "1.0.0"
+version = "0.1.0"
 name = "AMP Tools"
 tagline = "One-click production tools, starting with Instance Along Edges"
 maintainer = "unreal3r"
