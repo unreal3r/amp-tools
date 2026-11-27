@@ -25,9 +25,10 @@ modifier; it doesn't add a second one.
 | **Use Spacing** | Off: place **Count** copies spread over the whole line. On: place a copy every **Spacing** units. |
 | **Count** | Total number of copies along the whole line (Use Spacing off). |
 | **Spacing** | Distance between copies, measured along the edges (Use Spacing on). |
-| **Offset** | Slides every copy along the line. Handy when one lands awkwardly near a break. |
+| **Start Offset** | Slides every copy along the line. Handy when one lands awkwardly near a break. (Called *Offset* before AMP Tools 0.3.0.) |
 | **Align to Edges** | Rotates copies so their **+X** axis follows the edge and **+Z** stays as close to world up as possible. |
 | **Rotation** | Extra rotation for every copy, in its own local space. Use it if your mesh's "forward" isn't +X. |
+| **Position Offset** | Moves every copy away from its spot on the line, so you don't have to move the base mesh or the edges. With **Align to Edges** on, it follows each copy's direction: **X** = along the edge, **Y** = to the side (+Y is to the left when looking along the edge's direction), **Z** = up. With it off, X/Y/Z are the object's own axes. **Scale** doesn't change the distance. |
 | **Scale** | Uniform scale for every copy. |
 | **Random Scale** | 0 = all the same size; 1 = sizes vary from 0 to 2x **Scale**. |
 | **Seed** | Changes the random picks (collection objects and random scale). |
@@ -41,10 +42,13 @@ as **one continuous path**: the gaps themselves don't count toward the distance.
 
 - Spacing is exactly the same everywhere along the edges.
 - Short pieces get fewer copies (possibly none) instead of being crammed.
-- Copies don't always sit on the ends of each piece. Use **Offset** to nudge them.
+- Copies don't always sit on the ends of each piece. Use **Start Offset** to nudge them.
 
 ## Tips
 
+- **Placing copies beside or above the line:** use **Position Offset** instead of moving the
+  object or its origin. For example, Y = 1.5 puts a row of posts 1.5 units to one side of a
+  road edge, and -1.5 puts them on the other side.
 - **Vertical edges:** with Align to Edges on, "Z up" can't be satisfied on a perfectly
   vertical edge, so the twist around that edge may look arbitrary. Use **Rotation**, or turn
   off Align to Edges.

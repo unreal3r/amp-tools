@@ -45,7 +45,7 @@ def set_menu(node, prop, socket_name, value):
 
 # Bump when the node tree changes, so files built with an older version get
 # their node group rebuilt (existing modifiers keep their settings).
-GROUP_VERSION = 3
+GROUP_VERSION = 4
 VERSION_KEY = _common.VERSION_KEY
 
 
@@ -88,7 +88,7 @@ def build_group(name=GROUP_NAME):
                       desc="On: place by fixed distance. Off: fixed total count")
     inp("Count", "NodeSocketInt", 10, 1, 100000, "Total instances, spread evenly over the whole line")
     inp("Spacing", "NodeSocketFloat", 1.0, 0.001, 1e6, "Distance between instances, measured along the edges")
-    inp("Offset", "NodeSocketFloat", 0.0, 0.0, 1e6, "Shift where the first instance lands along the line")
+    inp("Start Offset", "NodeSocketFloat", 0.0, 0.0, 1e6, "Shift where the first instance lands along the line")
     inp("Align to Edges", "NodeSocketBool", True, desc="Rotate instances to follow the edge direction")
     inp("Rotation", "NodeSocketRotation", desc="Extra local rotation for every instance")
     inp("Scale", "NodeSocketFloat", 1.0, 0.0, 1e6)
@@ -96,6 +96,15 @@ def build_group(name=GROUP_NAME):
     inp("Seed", "NodeSocketInt", 0)
     inp("Keep Edges", "NodeSocketBool", False, desc="Also output the original edge mesh")
     inp("Realize", "NodeSocketBool", False, desc="Convert instances to real geometry")
+    # Added in group version 4. Created last so older sockets keep their
+    # identifiers (existing modifiers keep their values on upgrade), then
+    # moved up next to Rotation in the UI.
+    pos_off = inp("Position Offset", "NodeSocketVector", (0.0, 0.0, 0.0),
+                  desc="Move every instance from its spot on the line. With Align to Edges: "
+                       "X = along the edge, Y = to the side, Z = up. Not affected by Scale")
+    pos_off.subtype = "TRANSLATION"
+    items = list(itf.items_tree)
+    itf.move(pos_off, items.index(itf.items_tree["Rotation"]) + 1)
     itf.new_socket("Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
 
     N, L = ng.nodes, ng.links
@@ -143,14 +152,14 @@ def build_group(name=GROUP_NAME):
     spacing = sw_sp.outputs[0]
 
     # number of points = floor((total - offset) / spacing) + 1, 0 if no edges
-    usable = math("MAXIMUM", -600, 300, math("SUBTRACT", -850, 250, tot, sock(GI, "Offset")), 0.0)
+    usable = math("MAXIMUM", -600, 300, math("SUBTRACT", -850, 250, tot, sock(GI, "Start Offset")), 0.0)
     n = math("ADD", -100, 300,
              math("FLOOR", -350, 300, math("ADD", -350, 200, math("DIVIDE", -600, 150, usable, spacing), 1e-4)), 1.0)
     n = math("MULTIPLY", 100, 300, n, math("GREATER_THAN", -100, 450, tot, 0.0))
 
     # distance along the whole line for point i = Offset + i * spacing
     idx = node("GeometryNodeInputIndex", -600, 0)
-    dist = math("MULTIPLY_ADD", -350, 0, idx.outputs[0], spacing, sock(GI, "Offset"))
+    dist = math("MULTIPLY_ADD", -350, 0, idx.outputs[0], spacing, sock(GI, "Start Offset"))
 
     samp = node("GeometryNodeSampleCurve", -100, 0)
     set_menu(samp, "mode", "Mode", "Length")
@@ -230,8 +239,19 @@ def build_group(name=GROUP_NAME):
     L.new(mul_s.outputs[0], sock(iop.inputs, "Scale"))
 
     # Extra user rotation in local space
-    rot_i = node("GeometryNodeRotateInstances", 600, 100)
-    L.new(iop.outputs["Instances"], rot_i.inputs["Instances"])
+    # Position Offset in each instance's own frame (edge-aligned), applied
+    # before the extra Rotation and independent of the instance scale
+    inst_rot = node("GeometryNodeInputInstanceRotation", 350, -250)
+    off_rot = node("FunctionNodeRotateVector", 450, -150)
+    L.new(sock(GI, "Position Offset"), sock(off_rot.inputs, "Vector"))
+    L.new(inst_rot.outputs[0], sock(off_rot.inputs, "Rotation"))
+    trans = node("GeometryNodeTranslateInstances", 500, 100)
+    L.new(iop.outputs["Instances"], trans.inputs["Instances"])
+    L.new(off_rot.outputs[0], sock(trans.inputs, "Translation"))
+    sock(trans.inputs, "Local Space").default_value = False
+
+    rot_i = node("GeometryNodeRotateInstances", 700, 100)
+    L.new(trans.outputs["Instances"], rot_i.inputs["Instances"])
     L.new(sock(GI, "Rotation"), sock(rot_i.inputs, "Rotation"))
     sock(rot_i.inputs, "Local Space").default_value = True
 
