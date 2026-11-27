@@ -26,7 +26,7 @@ modifier; it doesn't add a second one.
 | **Count** | Total number of copies along the whole line (Use Spacing off). On a closed loop they're spread evenly all the way round. |
 | **Spacing** | Distance between copies, measured along the edges (Use Spacing on). |
 | **Start Offset** | Slides every copy along the line. Handy when one lands awkwardly near a break. (Called *Offset* before AMP Tools 0.3.0.) |
-| **Align to Edges** | Off by default. When on, rotates copies so their **+X** axis follows the edge and **+Z** stays as close to up as possible. Fine-tune the result with **Rotation**. |
+| **Align to Edges** | Off by default. When on, rotates copies so their **+X** axis follows the edge and **+Z** follows the line's "up" (see below). Fine-tune the result with **Rotation**. |
 | **Rotation** | Extra rotation for every copy, in its own local space. Use it if your mesh's "forward" isn't +X. |
 | **Position Offset** | Shifts the whole line the copies sit on, so you don't have to move the base mesh or the edges. **Y** moves it to the side (+Y is to the left when looking along the edge's direction) and **Z** moves it up; corners are mitered like an inset, so copies stay exactly that far from *every* edge, even at corners. **X** slides the copies along the line. Works with **Align to Edges** on or off; **Scale** doesn't change the distance. |
 | **Scale** | Uniform scale for every copy. |
@@ -49,6 +49,14 @@ up and an outer corner doesn't leave a gap.
 - Offsetting inward by more than half the width of a shape makes the line cross over
   itself (a full straight skeleton would merge those edges instead).
 
+## Which way is "up"
+
+Align to Edges and Position Offset (Y/Z) need an "up" direction at every point. It's carried
+smoothly along each piece of the line, turning only as much as the line bends, so it never
+flips, even where the line runs straight up or down. Each piece is then turned as a whole so
+that, where the line is closest to horizontal, up is world +Z. Flat lines therefore get plain
+Z-up, and a loop hanging in a vertical plane keeps the same side facing out all the way round.
+
 ## How spacing works on broken lines
 
 If your line has gaps (deleted segments) or several separate pieces, they are all treated
@@ -63,9 +71,9 @@ as **one continuous path**: the gaps themselves don't count toward the distance.
 - **Placing copies beside or above the line:** use **Position Offset** instead of moving the
   object or its origin. For example, Y = 1.5 puts a row of posts 1.5 units to one side of a
   road edge, and -1.5 puts them on the other side.
-- **Vertical edges:** with Align to Edges on, "Z up" can't be satisfied on a perfectly
-  vertical edge, so the twist around that edge may look arbitrary. Use **Rotation**, or turn
-  off Align to Edges.
+- **Strings that go up and down** (hanging beads, loops round a pipe): "up" is carried smoothly
+  along the line (a minimum-twist frame), so copies and offsets never flip over where the line
+  passes through vertical.
 - **Updating:** when a new AMP Tools version changes this tool, clicking the button again
   upgrades the node group in your file. Existing modifiers keep their settings.
 - The modifier uses a regular Geometry Nodes group named *Instance Along Edges*, so you can

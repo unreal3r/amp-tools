@@ -67,3 +67,32 @@ def add_modifier(operator, context, ng, label, hint):
     else:
         operator.report({"INFO"}, f"{label} is already on the selected object(s)")
     return {"FINISHED"}
+
+
+# ---- node-building helpers -------------------------------------------------
+
+def sock(sockets, name, kind=None):
+    """Find an available socket by name (optionally by socket type)."""
+    for s in sockets:
+        if s.name != name:
+            continue
+        if kind and s.type != kind:
+            continue
+        if getattr(s, "enabled", True) and getattr(s, "is_unavailable", False) is False:
+            return s
+    for s in sockets:  # fallback: ignore availability flags
+        if s.name == name and (not kind or s.type == kind):
+            return s
+    raise KeyError(f"socket {name!r} ({kind}) not found in {[x.name for x in sockets]}")
+
+
+def set_menu(node, prop, socket_name, value):
+    """Set an option that is a node property in some versions and a menu socket in others."""
+    if hasattr(node, prop):
+        try:
+            setattr(node, prop, value.upper())
+            return
+        except TypeError:
+            pass
+    s = sock(node.inputs, socket_name)
+    s.default_value = value

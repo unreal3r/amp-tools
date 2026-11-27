@@ -5,6 +5,7 @@ Each tool has a **?** button next to it in the AMP Tools panel that opens its pa
 | Tool | Page |
 |---|---|
 | Instance Along Edges | [instance_along_edges.md](instance_along_edges.md) |
+| Scatter on Plane | [scatter_on_plane.md](scatter_on_plane.md) |
 | Shrinkwrap Collection | [shrinkwrap_collection.md](shrinkwrap_collection.md) |
 
 Updating AMP Tools from inside Blender: [updates.md](updates.md)

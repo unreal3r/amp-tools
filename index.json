@@ -7,8 +7,8 @@
       "schema_version": "1.0.0",
       "id": "amp_tools",
       "name": "AMP Tools",
-      "tagline": "One-click Blender tools for placing and wrapping meshes",
-      "version": "0.3.1",
+      "tagline": "One-click Blender tools for placing, scattering and wrapping",
+      "version": "0.3.2",
       "type": "add-on",
       "maintainer": "unreal3r",
       "license": [
@@ -27,9 +27,9 @@
         "Modeling",
         "Object"
       ],
-      "archive_url": "https://github.com/unreal3r/amp-tools/releases/download/v0.3.1/amp_tools-0.3.1.zip",
-      "archive_size": 76981,
-      "archive_hash": "sha256:f8252ade7a8da1be7c9f440565b9987f451327e1fb6bed6515968fa12489d88b"
+      "archive_url": "https://github.com/unreal3r/amp-tools/releases/download/v0.3.2/amp_tools-0.3.2.zip",
+      "archive_size": 82908,
+      "archive_hash": "sha256:4ffe94cd1d1d5946935260708d6dd5ac992a70c28bdf273fc2d27e126c31aa4c"
     }
   ]
 }

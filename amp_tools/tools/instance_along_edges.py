@@ -16,36 +16,14 @@ from . import _common
 GROUP_NAME = "Instance Along Edges"
 
 
-def sock(sockets, name, kind=None):
-    """Find an available socket by name (optionally by socket type)."""
-    for s in sockets:
-        if s.name != name:
-            continue
-        if kind and s.type != kind:
-            continue
-        if getattr(s, "enabled", True) and getattr(s, "is_unavailable", False) is False:
-            return s
-    for s in sockets:  # fallback: ignore availability flags
-        if s.name == name and (not kind or s.type == kind):
-            return s
-    raise KeyError(f"socket {name!r} ({kind}) not found in {[x.name for x in sockets]}")
-
-
-def set_menu(node, prop, socket_name, value):
-    """Set an option that is a node property in some versions and a menu socket in others."""
-    if hasattr(node, prop):
-        try:
-            setattr(node, prop, value.upper())
-            return
-        except TypeError:
-            pass
-    s = sock(node.inputs, socket_name)
-    s.default_value = value
+sock = _common.sock
+set_menu = _common.set_menu
 
 
 # Bump when the node tree changes, so files built with an older version get
 # their node group rebuilt (existing modifiers keep their settings).
-GROUP_VERSION = 6
+GROUP_VERSION = 7
+UP_ATTR = "_amp_up"
 VERSION_KEY = _common.VERSION_KEY
 
 
@@ -166,6 +144,45 @@ def build_group(name=GROUP_NAME):
         L.new(if_true, sw.inputs["True"])
         return sw.outputs[0]
 
+    # ---- "Up" along the line: a minimum-twist frame, so it turns smoothly and
+    # never flips (world up breaks down where the line goes vertical). Each
+    # chain is then rotated as a whole so that, where the line is most
+    # horizontal, up points to world +Z, so flat lines behave as before.
+    tw = node("GeometryNodeSetCurveNormal", -1500, 300)
+    L.new(m2c.outputs["Curve"], tw.inputs["Curve"])
+    set_menu(tw, "mode", "Mode", "Minimum Twist")
+    t_f = node("GeometryNodeInputTangent", -1700, -1200).outputs[0]
+    n_f = node("GeometryNodeInputNormal", -1700, -1300).outputs["Normal"]
+    tz = vmath("DOT_PRODUCT", -1550, -1200, t_f, (0.0, 0.0, 1.0))
+    want = vmath("NORMALIZE", -1350, -1250, vmath("SUBTRACT", -1450, -1250, (0.0, 0.0, 1.0),
+                                                  vmath("SCALE", -1450, -1150, t_f, None, tz)))
+    # weight: horizontal parts count most, vertical parts not at all
+    w = math("POWER", -1350, -1100, math("SUBTRACT", -1450, -1100, 1.0, math("ABSOLUTE", -1500, -1100, tz)), 4.0)
+    cos_w = math("MULTIPLY", -1200, -1300, vmath("DOT_PRODUCT", -1300, -1300, n_f, want), w)
+    sin_w = math("MULTIPLY", -1200, -1400, vmath("DOT_PRODUCT", -1300, -1400,
+                                                 vmath("CROSS_PRODUCT", -1400, -1400, n_f, want), t_f), w)
+    chain = sock(node("GeometryNodeCurveOfPoint", -1300, -1500).outputs, "Curve Index")
+
+    def chain_total(v, y):
+        acc = node("GeometryNodeAccumulateField", -1050, y, data_type="FLOAT", domain="POINT")
+        L.new(v, sock(acc.inputs, "Value"))
+        L.new(chain, sock(acc.inputs, "Group ID"))
+        return sock(acc.outputs, "Total")
+
+    twist = math("ARCTAN2", -900, -1350, chain_total(sin_w, -1400), chain_total(cos_w, -1300))
+    twist_rot = node("FunctionNodeAxisAngleToRotation", -750, -1300)
+    L.new(t_f, twist_rot.inputs["Axis"]); L.new(twist, twist_rot.inputs["Angle"])
+    up_rot = node("FunctionNodeRotateVector", -600, -1300)
+    L.new(n_f, sock(up_rot.inputs, "Vector")); L.new(twist_rot.outputs[0], sock(up_rot.inputs, "Rotation"))
+    st_up = node("GeometryNodeStoreNamedAttribute", -1300, 300, data_type="FLOAT_VECTOR", domain="POINT")
+    sock(st_up.inputs, "Name").default_value = UP_ATTR
+    L.new(tw.outputs[0], st_up.inputs["Geometry"])
+    L.new(up_rot.outputs[0], sock(st_up.inputs, "Value", "VECTOR"))
+    curve_up = st_up.outputs[0]
+    up_attr = node("GeometryNodeInputNamedAttribute", -450, -1000, data_type="FLOAT_VECTOR")
+    sock(up_attr.inputs, "Name").default_value = UP_ATTR
+    UP = sock(up_attr.outputs, "Attribute", "VECTOR")
+
     off_xyz = node("ShaderNodeSeparateXYZ", -1150, -300)
     L.new(sock(GI, "Position Offset"), off_xyz.inputs[0])
     pos = node("GeometryNodeInputPosition", -1150, -450).outputs[0]
@@ -187,7 +204,6 @@ def build_group(name=GROUP_NAME):
     # line ends only have one edge: use it for both sides
     d_in = vswitch(prev_ok, d_out, d_in, -400, -650)
     d_out = vswitch(next_ok, d_in, d_out, -400, -850)
-    UP = (0.0, 0.0, 1.0)
     n_in = vmath("NORMALIZE", -150, -650, vmath("CROSS_PRODUCT", -250, -650, UP, d_in))    # left of edge
     n_out = vmath("NORMALIZE", -150, -850, vmath("CROSS_PRODUCT", -250, -850, UP, d_out))
     bis = vmath("NORMALIZE", 50, -750, vmath("ADD", -50, -750, n_in, n_out))
@@ -201,7 +217,7 @@ def build_group(name=GROUP_NAME):
                   vmath("SCALE", 450, -750, side, None, off_xyz.outputs["Y"]),
                   vmath("SCALE", 450, -1000, up, None, off_xyz.outputs["Z"]))
     set_path = node("GeometryNodeSetPosition", -850, 100)
-    L.new(m2c.outputs["Curve"], set_path.inputs["Geometry"])
+    L.new(curve_up, set_path.inputs["Geometry"])
     L.new(shift, sock(set_path.inputs, "Offset"))
     path = set_path.outputs["Geometry"]
 
@@ -257,6 +273,8 @@ def build_group(name=GROUP_NAME):
     else:
         sock(samp.inputs, "All Curves").default_value = True
     L.new(path, sock(samp.inputs, "Curves"))
+    samp.data_type = "FLOAT_VECTOR"
+    L.new(UP, sock(samp.inputs, "Value", "VECTOR"))
     L.new(dist, sock(samp.inputs, "Length"))
 
     pts = node("GeometryNodePoints", 150, 150)
@@ -269,7 +287,7 @@ def build_group(name=GROUP_NAME):
     set_menu(a2r, "primary_axis", "Primary Axis", "X")
     set_menu(a2r, "secondary_axis", "Secondary Axis", "Z")
     L.new(sock(samp.outputs, "Tangent"), sock(a2r.inputs, "Primary Axis"))
-    sock(a2r.inputs, "Secondary Axis").default_value = (0.0, 0.0, 1.0)
+    L.new(sock(samp.outputs, "Value", "VECTOR"), sock(a2r.inputs, "Secondary Axis"))  # smooth up
 
     # Align toggle: edge rotation vs identity
     sw_rot = node("GeometryNodeSwitch", 350, -150, input_type="ROTATION")

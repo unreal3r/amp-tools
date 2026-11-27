@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "amp_tools"
-version = "0.3.1"
+version = "0.3.2"
 name = "AMP Tools"
-tagline = "One-click Blender tools for placing and wrapping meshes"
+tagline = "One-click Blender tools for placing, scattering and wrapping"
 maintainer = "unreal3r"
 type = "add-on"
 

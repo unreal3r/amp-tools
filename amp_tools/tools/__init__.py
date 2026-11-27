@@ -7,9 +7,10 @@ To add a tool: create a module (helpers in _common.py) in this folder that defin
 then add the module to MODULES below and write docs/<page>.md.
 """
 
-from . import instance_along_edges, shrinkwrap_collection
+from . import instance_along_edges, scatter_on_plane, shrinkwrap_collection
 
 MODULES = (
     instance_along_edges,
+    scatter_on_plane,
     shrinkwrap_collection,
 )

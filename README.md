@@ -11,6 +11,7 @@ Requires Blender 5.3 or newer.
 | Tool | What it does | Docs |
 |---|---|---|
 | Instance Along Edges | Places a mesh or collection along any string of mesh edges, with even spacing even across gaps. | [docs](docs/instance_along_edges.md) |
+| Scatter on Plane | Scatters a mesh or collection over a surface: random with a minimum distance, a jittered grid, or a density per m². | [docs](docs/scatter_on_plane.md) |
 | Shrinkwrap Collection | Wraps a mesh onto the combined surface of every mesh in a collection, with an offset. | [docs](docs/shrinkwrap_collection.md) |
 
 ## Install
