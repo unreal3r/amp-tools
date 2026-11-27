@@ -1,0 +1,35 @@
+{
+  "version": "v1",
+  "blocklist": [],
+  "assetlib_auth_method": "PER_LIBRARY",
+  "data": [
+    {
+      "schema_version": "1.0.0",
+      "id": "amp_tools",
+      "name": "AMP Tools",
+      "tagline": "One-click Blender tools for placing and wrapping meshes",
+      "version": "0.3.1",
+      "type": "add-on",
+      "maintainer": "unreal3r",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "5.3.0",
+      "website": "https://github.com/unreal3r/amp-tools",
+      "copyright": [
+        "2026 unreal3r"
+      ],
+      "permissions": {
+        "network": "Check for and download AMP Tools updates from GitHub"
+      },
+      "tags": [
+        "Geometry Nodes",
+        "Modeling",
+        "Object"
+      ],
+      "archive_url": "https://github.com/unreal3r/amp-tools/releases/download/v0.3.1/amp_tools-0.3.1.zip",
+      "archive_size": 76981,
+      "archive_hash": "sha256:f8252ade7a8da1be7c9f440565b9987f451327e1fb6bed6515968fa12489d88b"
+    }
+  ]
+}

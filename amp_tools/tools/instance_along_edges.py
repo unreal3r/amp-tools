@@ -45,7 +45,7 @@ def set_menu(node, prop, socket_name, value):
 
 # Bump when the node tree changes, so files built with an older version get
 # their node group rebuilt (existing modifiers keep their settings).
-GROUP_VERSION = 4
+GROUP_VERSION = 6
 VERSION_KEY = _common.VERSION_KEY
 
 
@@ -89,7 +89,8 @@ def build_group(name=GROUP_NAME):
     inp("Count", "NodeSocketInt", 10, 1, 100000, "Total instances, spread evenly over the whole line")
     inp("Spacing", "NodeSocketFloat", 1.0, 0.001, 1e6, "Distance between instances, measured along the edges")
     inp("Start Offset", "NodeSocketFloat", 0.0, 0.0, 1e6, "Shift where the first instance lands along the line")
-    inp("Align to Edges", "NodeSocketBool", True, desc="Rotate instances to follow the edge direction")
+    inp("Align to Edges", "NodeSocketBool", False,
+        desc="Rotate instances to follow the edge direction (fine-tune with Rotation)")
     inp("Rotation", "NodeSocketRotation", desc="Extra local rotation for every instance")
     inp("Scale", "NodeSocketFloat", 1.0, 0.0, 1e6)
     inp("Random Scale", "NodeSocketFloat", 0.0, 0.0, 1.0, "0 = uniform, 1 = scale varies from 0 to 2x")
@@ -100,8 +101,8 @@ def build_group(name=GROUP_NAME):
     # identifiers (existing modifiers keep their values on upgrade), then
     # moved up next to Rotation in the UI.
     pos_off = inp("Position Offset", "NodeSocketVector", (0.0, 0.0, 0.0),
-                  desc="Move every instance from its spot on the line. With Align to Edges: "
-                       "X = along the edge, Y = to the side, Z = up. Not affected by Scale")
+                  desc="Move every instance relative to its edge: X = along the edge, "
+                       "Y = to the side, Z = up. Works with Align to Edges on or off; not affected by Scale")
     pos_off.subtype = "TRANSLATION"
     items = list(itf.items_tree)
     itf.move(pos_off, items.index(itf.items_tree["Rotation"]) + 1)
@@ -138,13 +139,92 @@ def build_group(name=GROUP_NAME):
                 L.new(v, m.inputs[i])
         return m.outputs[0]
 
+    # ---- Offset the PATH itself (like an inset / straight skeleton): every
+    # edge moves sideways by Y and up by Z, and neighbouring edges meet on
+    # their angle bisector (mitered corners). Copies are then placed along
+    # this offset path, so corners stay clean and spacing is measured on it.
+    def vmath(op, x, y, a=None, b=None, scale=None):
+        m = node("ShaderNodeVectorMath", x, y, operation=op)
+        for i, v in enumerate((a, b)):
+            if v is None:
+                continue
+            if isinstance(v, (tuple, list)):
+                m.inputs[i].default_value = v
+            else:
+                L.new(v, m.inputs[i])
+        if scale is not None:
+            if isinstance(scale, (int, float)):
+                sock(m.inputs, "Scale").default_value = scale
+            else:
+                L.new(scale, sock(m.inputs, "Scale"))
+        return m.outputs["Value"] if op in ("DOT_PRODUCT", "LENGTH", "DISTANCE") else m.outputs["Vector"]
+
+    def vswitch(cond, if_false, if_true, x, y):
+        sw = node("GeometryNodeSwitch", x, y, input_type="VECTOR")
+        L.new(cond, sw.inputs["Switch"])
+        L.new(if_false, sw.inputs["False"])
+        L.new(if_true, sw.inputs["True"])
+        return sw.outputs[0]
+
+    off_xyz = node("ShaderNodeSeparateXYZ", -1150, -300)
+    L.new(sock(GI, "Position Offset"), off_xyz.inputs[0])
+    pos = node("GeometryNodeInputPosition", -1150, -450).outputs[0]
+    pidx = node("GeometryNodeInputIndex", -1150, -550).outputs[0]
+
+    def neighbour(offset, y):
+        nb = node("GeometryNodeOffsetPointInCurve", -950, y)
+        L.new(pidx, sock(nb.inputs, "Point Index"))
+        sock(nb.inputs, "Offset").default_value = offset
+        at = node("GeometryNodeFieldAtIndex", -750, y, data_type="FLOAT_VECTOR", domain="POINT")
+        L.new(sock(nb.outputs, "Point Index"), sock(at.inputs, "Index"))
+        L.new(pos, sock(at.inputs, "Value", "VECTOR"))
+        return sock(nb.outputs, "Is Valid Offset"), at.outputs[0]
+
+    prev_ok, prev_p = neighbour(-1, -650)
+    next_ok, next_p = neighbour(1, -850)
+    d_in = vmath("NORMALIZE", -550, -650, vmath("SUBTRACT", -650, -650, pos, prev_p))
+    d_out = vmath("NORMALIZE", -550, -850, vmath("SUBTRACT", -650, -850, next_p, pos))
+    # line ends only have one edge: use it for both sides
+    d_in = vswitch(prev_ok, d_out, d_in, -400, -650)
+    d_out = vswitch(next_ok, d_in, d_out, -400, -850)
+    UP = (0.0, 0.0, 1.0)
+    n_in = vmath("NORMALIZE", -150, -650, vmath("CROSS_PRODUCT", -250, -650, UP, d_in))    # left of edge
+    n_out = vmath("NORMALIZE", -150, -850, vmath("CROSS_PRODUCT", -250, -850, UP, d_out))
+    bis = vmath("NORMALIZE", 50, -750, vmath("ADD", -50, -750, n_in, n_out))
+    # miter: 1 / cos(half the turn), limited to 8x for near-reversals
+    miter = math("DIVIDE", 250, -750, 1.0,
+                 math("MAXIMUM", 150, -750, vmath("DOT_PRODUCT", 50, -900, bis, n_in), 0.125))
+    side = vmath("SCALE", 350, -750, bis, None, miter)
+    up = vmath("NORMALIZE", 250, -1000, vmath("CROSS_PRODUCT", 150, -1000,
+                                               vmath("NORMALIZE", 50, -1050, vmath("ADD", -50, -1050, d_in, d_out)), bis))
+    shift = vmath("ADD", 550, -850,
+                  vmath("SCALE", 450, -750, side, None, off_xyz.outputs["Y"]),
+                  vmath("SCALE", 450, -1000, up, None, off_xyz.outputs["Z"]))
+    set_path = node("GeometryNodeSetPosition", -850, 100)
+    L.new(m2c.outputs["Curve"], set_path.inputs["Geometry"])
+    L.new(shift, sock(set_path.inputs, "Offset"))
+    path = set_path.outputs["Geometry"]
+
+    # X slides copies along the (offset) path: added to Start Offset, and a
+    # negative total wraps around by whole spacings instead of piling up at 0
+    start = math("ADD", -1100, 700, sock(GI, "Start Offset"), off_xyz.outputs["X"])
+
     total = node("GeometryNodeCurveLength", -850, 400)
-    L.new(m2c.outputs["Curve"], total.inputs["Curve"])
+    L.new(path, total.inputs["Curve"])
     tot = total.outputs["Length"]
 
+    # Closed loops: start == end, so they must not get a copy at both.
+    # cyc = 1 when every chain is a closed loop.
+    stat = node("GeometryNodeAttributeStatistic", -850, 900, data_type="FLOAT", domain="CURVE")
+    L.new(path, stat.inputs["Geometry"])
+    L.new(node("GeometryNodeInputSplineCyclic", -1100, 900).outputs[0], sock(stat.inputs, "Attribute", "VALUE"))
+    cyc = sock(stat.outputs, "Min")
+
     # Count mode: spread Count instances evenly over the total length
+    # (open lines: Count - 1 gaps; closed loops: Count gaps)
     count_gap = math("DIVIDE", -600, 550, tot,
-                     math("MAXIMUM", -850, 550, math("SUBTRACT", -1100, 550, sock(GI, "Count"), 1.0), 1.0))
+                     math("MAXIMUM", -850, 550,
+                          math("ADD", -1000, 550, math("SUBTRACT", -1100, 550, sock(GI, "Count"), 1.0), cyc), 1.0))
     sw_sp = node("GeometryNodeSwitch", -350, 450, input_type="FLOAT")
     L.new(sock(GI, "Use Spacing"), sw_sp.inputs["Switch"])
     L.new(count_gap, sw_sp.inputs["False"])
@@ -152,14 +232,23 @@ def build_group(name=GROUP_NAME):
     spacing = sw_sp.outputs[0]
 
     # number of points = floor((total - offset) / spacing) + 1, 0 if no edges
-    usable = math("MAXIMUM", -600, 300, math("SUBTRACT", -850, 250, tot, sock(GI, "Start Offset")), 0.0)
-    n = math("ADD", -100, 300,
-             math("FLOOR", -350, 300, math("ADD", -350, 200, math("DIVIDE", -600, 150, usable, spacing), 1e-4)), 1.0)
+    wrapped = math("WRAP", -350, 700, start, spacing, 0.0)
+    start = math("MULTIPLY_ADD", -100, 700, math("LESS_THAN", -350, 850, start, 0.0),
+                 math("SUBTRACT", -200, 750, wrapped, start), start)
+    usable = math("MAXIMUM", -600, 300, math("SUBTRACT", -850, 250, tot, start), 0.0)
+    n_open = math("ADD", -100, 300,
+                  math("FLOOR", -350, 300, math("ADD", -350, 200, math("DIVIDE", -600, 150, usable, spacing), 1e-4)), 1.0)
+    # loops: just enough copies to go round once, no copy on top of the first
+    n_loop = math("CEIL", -350, 100, math("SUBTRACT", -450, 100, math("DIVIDE", -600, 100, tot, spacing), 1e-4))
+    n = math("MULTIPLY_ADD", 0, 200, cyc, math("SUBTRACT", -100, 150, n_loop, n_open), n_open)
     n = math("MULTIPLY", 100, 300, n, math("GREATER_THAN", -100, 450, tot, 0.0))
 
-    # distance along the whole line for point i = Offset + i * spacing
+    # distance along the whole line for point i = start + i * spacing
+    # (on loops it wraps round past the seam)
     idx = node("GeometryNodeInputIndex", -600, 0)
-    dist = math("MULTIPLY_ADD", -350, 0, idx.outputs[0], spacing, sock(GI, "Start Offset"))
+    d_lin = math("MULTIPLY_ADD", -350, 0, idx.outputs[0], spacing, start)
+    d_wrap = math("WRAP", -350, -100, d_lin, tot, 0.0)
+    dist = math("MULTIPLY_ADD", -200, 0, cyc, math("SUBTRACT", -250, -50, d_wrap, d_lin), d_lin)
 
     samp = node("GeometryNodeSampleCurve", -100, 0)
     set_menu(samp, "mode", "Mode", "Length")
@@ -167,7 +256,7 @@ def build_group(name=GROUP_NAME):
         samp.use_all_curves = True
     else:
         sock(samp.inputs, "All Curves").default_value = True
-    L.new(m2c.outputs["Curve"], sock(samp.inputs, "Curves"))
+    L.new(path, sock(samp.inputs, "Curves"))
     L.new(dist, sock(samp.inputs, "Length"))
 
     pts = node("GeometryNodePoints", 150, 150)
@@ -239,19 +328,8 @@ def build_group(name=GROUP_NAME):
     L.new(mul_s.outputs[0], sock(iop.inputs, "Scale"))
 
     # Extra user rotation in local space
-    # Position Offset in each instance's own frame (edge-aligned), applied
-    # before the extra Rotation and independent of the instance scale
-    inst_rot = node("GeometryNodeInputInstanceRotation", 350, -250)
-    off_rot = node("FunctionNodeRotateVector", 450, -150)
-    L.new(sock(GI, "Position Offset"), sock(off_rot.inputs, "Vector"))
-    L.new(inst_rot.outputs[0], sock(off_rot.inputs, "Rotation"))
-    trans = node("GeometryNodeTranslateInstances", 500, 100)
-    L.new(iop.outputs["Instances"], trans.inputs["Instances"])
-    L.new(off_rot.outputs[0], sock(trans.inputs, "Translation"))
-    sock(trans.inputs, "Local Space").default_value = False
-
     rot_i = node("GeometryNodeRotateInstances", 700, 100)
-    L.new(trans.outputs["Instances"], rot_i.inputs["Instances"])
+    L.new(iop.outputs["Instances"], rot_i.inputs["Instances"])
     L.new(sock(GI, "Rotation"), sock(rot_i.inputs, "Rotation"))
     sock(rot_i.inputs, "Local Space").default_value = True
 
